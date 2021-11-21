@@ -1,0 +1,1270 @@
+#include <EEPROM.h>
+#include <RemoteReceiver.h>
+#include <GPRS_Shield_Arduino.h>
+#include <Wire.h>
+#include <SoftwareSerial.h>
+#include <RGBLED.h>
+
+/*#include "Talkie.h"
+  #include "Vocab_US_Large.h"
+  #include "Vocab_Special.h"*/
+
+
+GPRS gprs( 7, 8, 9600 );
+//Talkie voice;
+RGBLED rgbLed(11, 9, 6, COMMON_ANODE);
+
+///////////////////// Real Time .....................
+
+char RealTime [24];
+//int CurrentTimeIntH ;
+int CurrentTimeIntM ;
+int CurrentTimeIntS ;
+///////////////////// Power Up .....................
+
+int PowerUp = 0 ;
+long int PowerOffTimeStart = 0 ;
+long int PowerOffTimeEnd = 0 ;
+///////////////////// Auto Reset .....................
+
+//int AutoResetR = 5 ; /// Relay Method
+int AutoReset = A1 ;
+
+///////////////////// Is Active .....................
+
+long int FirstTime ;
+long int LastTime ;
+int CountIsActive = 0 ;
+/////////////////////// Gas Sensor Related Variable.....................
+//
+//const int GasSensor = A0;
+//int GasSensorFirstValue = 0;
+//int GasSensorLastValue = 0;
+
+
+/////////////////// Mac Address ///////////////////
+
+String MAC = "1234567893";
+
+String One = "MAC ";
+String Two = " PMBL";
+String SMSOne = One + MAC + Two;
+//String SMSOne = "MAC 1234567893 PMBL"; //(0, 19)
+//String SMSTwo = "MAC 1234567893 D"; // (0,16)
+String SMSTwo = One + MAC + " D";
+String SMSThree = One + MAC + " x";
+
+////////////////// Primary Number ///////////////
+
+char PrimaryNumberCharArray [13] ;
+char SecodaryNumberCharArray [13];
+
+////////////////// Power Pin ///////////////
+
+int PowerPin = 10;
+//int CountPower = 0 ;
+
+//long val;
+//unsigned long TuchTime;
+//int address;
+//String EEPROMMainFunc;
+int messageIndex = 0;
+char phone[16];
+char datetime[24];
+char message[160];
+//char RealTime [24];
+//int CurrentTimeIntH;
+//int CurrentTimeIntM;
+//int Loop = 0 ;
+String  tem;
+int buzer = 13;
+int buttonPinMod = 4 ;
+int rgb = 13 ;
+unsigned long count = 0 ;
+int OnOff = 0 ;
+String test;
+
+void setup() {
+  // Open serial communications and wait for port to open:
+  Serial.begin(9600);
+  RemoteReceiver::start(0);
+  while (!Serial) {
+    ; // wait for serial port to connect. Needed for native USB port only
+  }
+  /// GPRS Initialization..............
+  gprs.checkPowerUp();
+  while (!gprs.init()) {
+    delay(1000);
+  }
+
+
+  while (!gprs.checkSIMStatus()) {
+    // Serial.println("SIM card not inserted......");
+    rgbLed.writeRGB(255, 255, 0);
+    delay(1000);
+    rgbLed.writeRGB(255, 255, 255);
+    delay(100);
+  }
+  while (!gprs.isNetworkRegistered()) {
+
+    delay(100);
+  }
+
+  Serial.println("gprs initialize done");
+
+  gprs.sleep();
+
+
+  pinMode(buzer, OUTPUT);
+  digitalWrite(buzer, HIGH);
+
+  pinMode(buttonPinMod, INPUT_PULLUP);
+  digitalWrite(buttonPinMod, HIGH);
+
+
+  pinMode(rgb, OUTPUT);
+  digitalWrite(rgb, LOW);
+
+  pinMode(PowerPin, INPUT);
+  digitalWrite(PowerPin, LOW);
+
+  //  pinMode(AutoResetR, INPUT);
+  //  digitalWrite(AutoResetR, HIGH);
+
+  pinMode(AutoReset, INPUT);
+  digitalWrite(AutoReset, HIGH);
+
+  rgbLed.writeRGB(255, 255, 255);
+
+
+
+  ////////////////// Power Supplay ..................
+
+  // EEPROM.update(1020, 255);
+
+}
+
+void REALTIME () {
+  gprs.getDateTime(RealTime);
+  //Serial.println(RealTime);
+
+  String CurrentTime;
+  CurrentTime.concat(RealTime);
+  //  String subH = CurrentTime.substring(9, 11);
+  //  CurrentTimeIntH = subH.toInt();
+
+
+  String subM = CurrentTime.substring(12, 14);
+  CurrentTimeIntM = subM.toInt();
+
+  String subS = CurrentTime.substring(15, 17);
+  CurrentTimeIntS = subS.toInt();
+
+  // Serial.println(CurrentTimeIntS);
+  //  Serial.println(RealTime);
+}
+
+void rest () {
+  pinMode(AutoReset, OUTPUT);
+  digitalWrite(AutoReset, LOW);
+}
+
+void Buzzer () {
+  digitalWrite(13, HIGH);
+  rgbLed.writeRGB(255, 255, 255);
+  delay(25);
+  digitalWrite(13, LOW);
+  //rgbLed.writeRGB(255, 0, 255);
+  rgbLed.writeRGB(0, 255, 0);
+  delay(25);
+}
+
+void Blink () {
+  // digitalWrite(13, HIGH);
+  rgbLed.writeRGB(255, 255, 255);
+  delay(25);
+  // digitalWrite(13, LOW);
+  // rgbLed.writeRGB(255, 0, 255);
+  rgbLed.writeRGB(0, 255, 0);
+  delay(25);
+}
+
+void FlashAll () {
+
+  for ( int i = 0 ; i < 1024 ; i++ ) {
+    EEPROM.update(i, 0);
+  }
+  ////////////////// Power Supplay ..................
+
+  EEPROM.update(1020, 255);
+
+  ////////////////// Active Deactive ..................
+
+  EEPROM.update(1023, 255);
+}
+
+//void  Blue () {
+//
+//  int count2 = 0 ;
+//
+//  for ( ; ; ) {
+//    if ( digitalRead(buttonPinMod) == LOW) {
+//      count2++;
+//      delay(20);
+//      if (count2 > 100) {
+//
+//        Buzzer ();
+//      }
+//    }
+//    else if (digitalRead(buttonPinMod) == HIGH) {
+//
+//      if ( count2 >= 100 ) {
+//        FlashAll ();
+//        break;
+//      }
+//
+//      else if (count2 < 100 && count2 > 2 ) {
+//        rgbLed.writeRGB(255, 255, 255);
+//        break;
+//      }
+//      else {
+//      }
+//
+//    }
+//  }
+//}
+//
+//void  Red () {
+//
+//  int count2 = 0 ;
+//
+//  for ( ; ; ) {
+//    if ( digitalRead(buttonPinMod) == LOW) {
+//      count2++;
+//      delay(20);
+//      if (count2 > 100) {
+//
+//        Buzzer ();
+//        //        break;
+//      }
+//    }
+//    else if (digitalRead(buttonPinMod) == HIGH) {
+//
+//      if ( count2 >= 100 ) {
+//
+//        if (EEPROM.read(1021) == 1) {
+//          EEPROM.update(1021, 0) ;
+//          rgbLed.writeRGB(255, 255, 255);
+//          // Serial.println("Deact...");
+//          break;
+//        }
+//
+//        else if (EEPROM.read(1021) == 0) {
+//          EEPROM.update(1021, 1) ;
+//          rgbLed.writeRGB(255, 255, 255);
+//          // Serial.println("Act...");
+//          break;
+//        }
+//        Buzzer ();
+//      }
+//
+//      else if (count2 < 100 && count2 > 2 ) {
+//        rgbLed.writeRGB(255, 255, 255);
+//        //Serial.println("Skip...");
+//        break;
+//      }
+//      else {
+//        //Serial.println("Nothing...");
+//      }
+//    }
+//    // Serial.println("Infinite Loop...");
+//  }
+//  //  Serial.print("count2 :");
+//  // delay(5);
+//
+//}
+//
+//
+//void StageTwo () {
+//
+//
+//  if ( count >= 500 && OnOff == 0 ) {
+//    //    Serial.print("count ");
+//    //    Serial.println(count);
+//    delay(5);
+//    rgbLed.writeRGB(0, 255, 0);
+//
+//    if ( digitalRead(buttonPinMod) == HIGH ) {
+//      Green () ;
+//    }
+//    if ( count == 999) {
+//      OnOff = 1 ;
+//    }
+//  }
+//
+//  if ( count >= 1000 && OnOff == 1  ) {
+//    //    Serial.print("count ");
+//    //    Serial.println(count);
+//    delay(5);
+//    //  count = 0 ;
+//    rgbLed.writeRGB(255, 0, 0);
+//
+//    if ( digitalRead(buttonPinMod) == HIGH ) {
+//      Red ();
+//    }
+//    //delay(2000);
+//    if ( count == 1499) {
+//      OnOff = 2 ;
+//    }
+//  }
+//
+//  if ( count >= 1500 && OnOff == 2 ) {
+//    //    Serial.print("count ");
+//    //    Serial.println(count);
+//    delay(5);
+//    //  count = 0 ;
+//    rgbLed.writeRGB(0, 0, 255);
+//
+//    if ( digitalRead(buttonPinMod) == HIGH ) {
+//      Blue ();
+//    }
+//    //delay(2000);
+//    if ( count == 1999) {
+//      //      OnOff = 3 ;
+//      OnOff = 0 ;
+//      count = 0 ;
+//    }
+//  }
+//
+//
+//}
+//
+//void StageOne () {
+//
+//  if ( digitalRead(buttonPinMod) == LOW ) {
+//    //  Serial.println("(buttonPinMod) == LOW...");
+//    for (;;) {
+//
+//      unsigned long SMil = micros();
+//
+//      if ( digitalRead(buttonPinMod) == HIGH ) {
+//
+//        rgbLed.writeRGB(100, 255, 100);
+//        break;
+//      }
+//      StageTwo ();
+//      count++;
+//      //  digitalWrite(rgb, LOW);
+//      unsigned long EMil = micros();
+//      //   Serial.println(EMil - SMil);
+//    }
+//    //    Serial.println("Loop End");
+//    //    Serial.print("count ");
+//    //    Serial.println(count);
+//    //delay(20);
+//    StageTwo ();
+//    OnOff = 0 ;
+//  }
+//
+//  count = 0 ;
+//}
+
+///////////////// Primary Number Sync ///////////////////////////
+
+void PrimaryNumberSync () {
+
+
+  String PrimaryNumberString ;
+  for (int i = 901 ; i <= 911 ; i++) {
+    long int PrimaryNumberInt = EEPROM.read(i);
+    PrimaryNumberString.concat(PrimaryNumberInt);
+  }
+
+  PrimaryNumberString.toCharArray(PrimaryNumberCharArray, 13);
+
+}
+
+////////////////// Primary Number Write ////////////////////////
+
+void PrimaryNumberWrite () {
+
+  int MassagePosition = 20  ;
+  for ( int i = 901 ; i <= 911 ; i++ ) {
+
+    char y[2];
+    int x;
+    y[0] = {message[MassagePosition]};
+    x = atoi(y);
+    EEPROM.update(i, x);
+    MassagePosition++;
+
+  }
+  // Serial.println("Primary Number Write Completed");
+}
+
+////////////////// Sensor Serial & Secondary Number Write ////////////////////////
+
+void SensorSerialSecondaryNumberWrite () {
+
+  int MatchSlot = 0;
+  // int OneCheek = 12 ;
+
+  for (int j = 1 ; j <= 900 ; j = j + 45 ) {
+
+    int MassagePosition =  3;
+    char y[2];
+    int x;
+    int k = j ;
+    int countx = 0;
+    //    String SensorSerial ;
+
+    for (k ; k <= j + 9 ; k++) {
+
+      y[0] = {message[MassagePosition]};
+      x = atoi(y);
+      //      SensorSerial.concat(x);
+      MassagePosition++;
+      // countx++;
+
+      if ( EEPROM.read(k) == x ) {
+        countx++;
+        if (countx == 10) {
+
+          //          Serial.print("Matched Sensor Slot is ");
+          //          Serial.println(j);
+
+          // MatchSlot = (((j - 1) / 45) + 1) ;
+          j = 901;
+          k = j + 45;
+        }
+      }
+
+
+
+      else {
+        k = j + 45 ;
+        if (j == 856) {
+          j = 901;
+          k = j + 45;
+          // Serial.println("Sensor Not Matched ");
+
+          //////////////////// Sensor Slot To write ........................
+
+
+          int OneCheek = 12 ;
+          //int CountOneCheek = 0 ;
+          for (int i = 1 ; i <= 20 ; i++) {
+            if (EEPROM.read(OneCheek) == 1) {
+              OneCheek = OneCheek + 45 ;
+            }
+            // CountOneCheek++;
+          }
+
+
+          ////////// Sensor SL and Secondary Number Write ..............
+          if (OneCheek <= 856 ) {
+            MassagePosition = 3;
+            int Increment = (OneCheek - 11) ;
+
+            //            Serial.print("Sensor Slot is ");
+            //            Serial.println(Increment);
+
+            String SensorSerial ;
+
+            for (int i = 1 ; i <= 21 ; i++) {
+              y[0] = {message[MassagePosition]};
+              x = atoi(y);
+              if (i <= 10) {
+                SensorSerial.concat(x);
+              }
+              EEPROM.update(Increment, x);
+              if (MassagePosition == 12) {
+                MassagePosition = MassagePosition + 7 ;
+              }
+              MassagePosition++;
+              Increment++;
+            }
+
+
+            String SensorSerialString = "SL " + SensorSerial + " Has Taken"  ;
+
+            String SensorNumberSensorSerial;
+            //  Serial.println(SensorNumberSensorSerial);
+
+            char SensorNumberSensorSerialArray [50] ;
+            SensorSerialString.toCharArray(SensorNumberSensorSerialArray, 50);
+
+            PrimaryNumberSync ();
+            gprs.wake();
+            delay(3000);
+            gprs.sendSMS(PrimaryNumberCharArray, SensorNumberSensorSerialArray);
+
+          }
+          else {
+            PrimaryNumberSync ();
+            gprs.wake();
+            delay(3000);
+            gprs.sendSMS(PrimaryNumberCharArray, "Sensor Capacity Full");
+          }
+        }
+      }
+
+
+    }
+  }
+}
+
+/////////////////// Sensor Serial Secondary Number Update /////////////////////////
+
+void SensorSerialSecondaryNumberUpdate () {
+
+  int MatchSlot = 0;
+
+  for (int j = 1 ; j <= 900 ; j = j + 45 ) {
+
+    int MassagePosition =  3;
+    char y[2];
+    int x;
+    int k = j ;
+    int countx = 0;
+
+
+    for (k ; k <= j + 9 ; k++) {
+
+      y[0] = {message[MassagePosition]};
+      x = atoi(y);
+      MassagePosition++;
+      //      countx++;
+
+      if ( EEPROM.read(k) == x ) {
+
+        countx++;
+
+        if (countx == 10) {
+
+          int g = j + 20 ;
+          int h = j + 10 ;
+          //Serial.println(h);
+          //Serial.println(g);
+          MassagePosition = 20 ;
+
+          String SensorSerial ;
+
+          for (h ; h <= g  ; h++) {
+            y[0] = {message[MassagePosition]};
+            x = atoi(y);
+            // if (i <= 10) {
+            SensorSerial.concat(x);
+            //  }
+            EEPROM.update(h, x);
+            MassagePosition++ ;
+          }
+
+          j = 901;
+          k = j + 45;
+
+          String SensorSerialString = "SL " + SensorSerial + " Has Updated"  ;
+
+          String SensorNumberSensorSerial;
+          //  Serial.println(SensorNumberSensorSerial);
+
+          char SensorNumberSensorSerialArray [50] ;
+          SensorSerialString.toCharArray(SensorNumberSensorSerialArray, 50);
+
+          //          Serial.print("SensorNumberSensorSerialArray ");
+          //          Serial.println(SensorNumberSensorSerialArray);
+
+          PrimaryNumberSync ();
+          gprs.wake();
+          delay(3000);
+          gprs.sendSMS(PrimaryNumberCharArray, SensorNumberSensorSerialArray);
+          //          gprs.sendSMS(PrimaryNumberCharArray, "Sensor Serial Taken");
+
+          //
+          //          PrimaryNumberSync ();
+          //          delay(3000);
+          //          gprs.sendSMS(PrimaryNumberCharArray, "Secondary Number Updated");
+        }
+      }
+    }
+  }
+}
+
+/////////////////// Sensor Serial Delete /////////////////////////
+
+void SensorSerialDelete () {
+
+  int MatchSlot = 0;
+
+  for (int j = 1 ; j <= 900 ; j = j + 45 ) {
+
+    int MassagePosition =  3;
+    char y[2];
+    int x;
+    int k = j ;
+    int countx = 0;
+
+    String SensorSerial;
+
+    for (k ; k <= j + 9 ; k++) {
+
+      y[0] = {message[MassagePosition]};
+      x = atoi(y);
+
+      SensorSerial.concat(x);
+
+      MassagePosition++;
+      //      countx++;
+
+      if ( EEPROM.read(k) == x ) {
+
+        countx++;
+
+        if (countx == 10) {
+
+          int g = j + 20 ;
+
+          for (j ; j <= g  ; j++) {
+
+            EEPROM.update(j, 0);
+
+          }
+
+          j = 901;
+          k = j + 45;
+
+          String SensorSerialString = "SL " + SensorSerial + " Has Deleted"  ;
+
+          String SensorNumberSensorSerial;
+          //   Serial.println(SensorNumberSensorSerial);
+
+          char SensorNumberSensorSerialArray [50] ;
+          SensorSerialString.toCharArray(SensorNumberSensorSerialArray, 50);
+
+          //          Serial.print("SensorNumberSensorSerialArray ");
+          //          Serial.println(SensorNumberSensorSerialArray);
+
+          PrimaryNumberSync ();
+          gprs.wake();
+          delay(3000);
+          gprs.sendSMS(PrimaryNumberCharArray, SensorNumberSensorSerialArray);
+
+
+          //          PrimaryNumberSync ();
+          //          delay(3000);
+          //          gprs.sendSMS(PrimaryNumberCharArray, "Sensor Serial Deleted");
+        }
+      }
+    }
+  }
+}
+////////////////// SMSCheek ////////////////////////
+
+void SMSCheek () {
+
+  Serial.println(message);
+  tem.concat(message);
+  String vc ;
+  vc = tem.substring(0, 3);
+  if (vc == "<#>"  ) {
+    PrimaryNumberSync () ;
+    gprs.wake();
+    gprs.sendSMS(PrimaryNumberCharArray, message);
+
+  }
+
+  //////////////// First Three SMS Cheek Loop //////////////
+
+  test = tem.substring(0, 3);
+
+  if (test == "MAC") {
+
+    test.remove(0, 159);
+
+    test = tem.substring(0, 19);
+
+
+    //String One = "MAC ";
+    //String Two = " PMBL";
+    //String SMSOne = One + MAC + Two;
+    ////String SMSOne = "MAC 1234567893 PMBL"; //(0, 19)
+    ////String SMSTwo = "MAC 1234567893 D"; // (0,16)
+    //String SMSTwo = One + MAC + " D";
+    //String SMSThree = One + MAC + " x";
+
+    if ( test == SMSOne ) {
+
+      // Serial.println("Mac Address Added");
+      ///////////// SMS 01 ////////// MAC 1234567893 PMBL 01324369920  //////////////////
+      PrimaryNumberWrite ();
+      PrimaryNumberSync ();
+      gprs.wake();
+      delay(3000);
+      gprs.sendSMS(PrimaryNumberCharArray, "MAC Address Matched And Primary Number Taken");
+
+      //////////// After Complition buzzer.............
+      for (int i = 1 ; i < 20 ; i++ ) {
+
+        Buzzer ();
+
+      }
+    }
+
+    test.remove(0, 159);
+
+    test = tem.substring(0, 16);
+
+
+    //String One = "MAC ";
+    //String Two = " PMBL";
+    //String SMSOne = One + MAC + Two;
+    ////String SMSOne = "MAC 1234567893 PMBL"; //(0, 19)
+    ////String SMSTwo = "MAC 1234567893 D"; // (0,16)
+    //String SMSTwo = One + MAC + " D";
+    //String SMSThree = One + MAC + " x";
+
+    if ( test == SMSThree ) {
+
+      //  Serial.println("Mac Address Deleted");
+      ///////////// SMS 06 ///////// MAC 1234567893 x ///////////////////////
+      PrimaryNumberSync ();
+      /// FlashAll ();
+      gprs.wake();
+      delay(3000);
+      // gprs.sendSMS(PrimaryNumberCharArray, "All Flash Completed");
+
+      if (EEPROM.read(1023) == 255) {
+        EEPROM.update(1023, 0) ;
+        EEPROM.update(1020, 255);
+        String MacDactive = MAC + " Is Deactive";
+        char MacDactiveArray [26];
+        Serial.println(MacDactive);
+        MacDactive.toCharArray(MacDactiveArray, 26);
+        PrimaryNumberSync ();
+        gprs.wake();
+        delay(3000);
+        gprs.sendSMS(PrimaryNumberCharArray, MacDactiveArray);
+      }
+
+      else if (EEPROM.read(1023) == 0) {
+        EEPROM.update(1023, 255) ;
+        EEPROM.update(1020, 255);
+        String MacActive = MAC + " Is Active";
+        Serial.println(MacActive);
+        char MacActiveArray [26];
+        MacActive.toCharArray(MacActiveArray, 26);
+        PrimaryNumberSync ();
+        gprs.wake();
+        delay(3000);
+        gprs.sendSMS(PrimaryNumberCharArray, MacActiveArray);
+      }
+
+      //////////// After Complition buzzer.............
+      for (int i = 1 ; i < 20 ; i++ ) {
+
+        Buzzer ();
+
+      }
+    }
+
+    test.remove(0, 159);
+
+    test = tem.substring(0, 16);
+
+    //String One = "MAC ";
+    //String Two = " PMBL";
+    //String SMSOne = One + MAC + Two;
+    ////String SMSOne = "MAC 1234567893 PMBL"; //(0, 19)
+    ////String SMSTwo = "MAC 1234567893 D"; // (0,16)
+    //String SMSTwo = One + MAC + " D";
+    //String SMSThree = One + MAC + " x";
+
+    if ( test == SMSTwo ) {
+
+      //  Serial.println("Mac Address Deleted");
+      ///////////// SMS 02 ///////// MAC 1234567893 D ///////////////////////
+      PrimaryNumberSync ();
+      FlashAll ();
+      gprs.wake();
+      delay(3000);
+      gprs.sendSMS(PrimaryNumberCharArray, "All Flash Completed");
+
+      //////////// After Complition buzzer.............
+      for (int i = 1 ; i < 20 ; i++ ) {
+
+        Buzzer ();
+
+      }
+    }
+    /////////////////////// Reset ....................
+    delay(5000);
+    rest ();
+  }
+
+  //////////////// Last Three SMS Cheek Loop //////////////
+
+  test.remove(0, 159);
+
+  test = tem.substring(0, 2);
+
+  if ( test == "SL" ) {
+
+    test.remove(0, 159);
+
+    test = tem.substring(14, 15);
+
+    //String One = "MAC ";
+    //String Two = " PMBL";
+    //String SMSOne = One + MAC + Two;
+    ////String SMSOne = "MAC 1234567893 PMBL"; //(0, 19)
+    ////String SMSTwo = "MAC 1234567893 D"; // (0,16)
+    //String SMSTwo = One + MAC + " D";
+    //String SMSThree = One + MAC + " x";
+
+    if ( test == "A" ) {
+
+      SensorSerialSecondaryNumberWrite ();
+      // Serial.println("Sensor Added");
+      ///////////// SMS 03 ///////// SL 1234567890 A MBL 01830222108 ///////////////////////
+      //////////// After Complition buzzer.............
+      for (int i = 1 ; i < 20 ; i++ ) {
+
+        Buzzer ();
+
+      }
+    }
+
+    //String One = "MAC ";
+    //String Two = " PMBL";
+    //String SMSOne = One + MAC + Two;
+    ////String SMSOne = "MAC 1234567893 PMBL"; //(0, 19)
+    ////String SMSTwo = "MAC 1234567893 D"; // (0,16)
+    //String SMSTwo = One + MAC + " D";
+    //String SMSThree = One + MAC + " x";
+
+    else if ( test == "U" ) {
+
+      //   Serial.println("Sensor Updated");
+      ///////////// SMS 04 ///////// SL 1234567890 U MBL 01830222108 ///////////////////////
+      SensorSerialSecondaryNumberUpdate ();
+
+      //////////// After Complition buzzer.............
+      for (int i = 1 ; i < 20 ; i++ ) {
+
+        Buzzer ();
+
+      }
+    }
+
+    //String One = "MAC ";
+    //String Two = " PMBL";
+    //String SMSOne = One + MAC + Two;
+    ////String SMSOne = "MAC 1234567893 PMBL"; //(0, 19)
+    ////String SMSTwo = "MAC 1234567893 D"; // (0,16)
+    //String SMSTwo = One + MAC + " D";
+    //String SMSThree = One + MAC + " x";
+
+    else if ( test == "D" ) {
+
+      // Serial.println("Sensor Deleted");
+      ///////////// SMS 05 ///////// SL 1234567890 D ///////////////////////
+      SensorSerialDelete ();
+
+      //////////// After Complition buzzer.............
+      for (int i = 1 ; i < 20 ; i++ ) {
+
+        Buzzer ();
+
+      }
+    }
+
+    //////////// Deleting tem and EEPROMMainFunc Cash Memory.............
+
+    test.remove(0, 159);
+    tem.remove(0, 159);
+    //  EEPROMMainFunc.remove(0, 53);
+
+    /////////////////////// Reset ....................
+    delay(5000);
+    rest ();
+  }
+}
+
+
+void SMS () {
+
+  messageIndex = gprs.isSMSunread();
+
+  if (messageIndex > 0) {
+    Blink () ;
+    gprs.readSMS(messageIndex, message, 160, phone, datetime);
+    gprs.deleteSMS(messageIndex);
+    SMSCheek ();
+  }
+
+  /////////////// Primary Looping Color  PURPLE (RED & BLUE)..............
+
+  rgbLed.writeRGB(225, 0, 225);
+  delay(1000);
+}
+
+////////////////// Section One /////////////////////////////////////////////
+
+//void SectionOne () {
+//  if (EEPROM.read(1023) == 1 ) {
+//    //  digitalWrite(rgb, HIGH);
+//    // Serial.println("One Section On");
+//  }
+//  else if (EEPROM.read(1023) == 0 ) {
+//
+//    // Serial.println("One Section Off");
+//    rgbLed.turnOff();
+//  }
+//}
+
+//////////////////// Section Two /////////////////////////////////////////////
+//
+//void SectionTwo () {
+//
+//
+//  if (EEPROM.read(1021) == 1 ) {
+//
+//    ///////////////////// Section Two On ORANGE (RED & partial GREEN).........
+//
+//    rgbLed.writeRGB(255, 128, 0);
+//
+//    //    if (GasSensorFirstValue + 2 < GasSensorLastValue ) {
+//    //      // Serial.println("Calling ");
+//    //
+//    //      PrimaryNumberSync ();
+//    //      //Serial.println(PrimaryNumberCharArray);
+//    //      delay(3000);
+//    //      gprs.callUp(PrimaryNumberCharArray);
+//    //      delay(30000);
+//    //      gprs.hangup();
+//    //      delay(3000);
+//    //      gprs.sendSMS(PrimaryNumberCharArray, "Gas Or Smook Alert, Cox's Bazar Fire Service Number: 01730002434");
+//    //
+//    //      for ( int i = 0 ; i < 1000 ; i++ ) {
+//    //        Buzzer ();
+//    //      }
+//    //    }
+//    //    else {
+//    //      // Serial.println("Two Section On");
+//    //    }
+//
+//  }
+//  else if (EEPROM.read(1021) == 0 ) {
+//
+//    ///////////////////// Section Two Off YELLOW (RED & GREEN).........
+//
+//    rgbLed.writeRGB(255, 255, 0);
+//  }
+//}
+
+///////////////////// Scanning //////////////////
+
+void  Scanning () {
+
+  if (RemoteReceiver::dataReady()) {
+
+    String RemoteSensorValue ;
+    RemoteSensorValue = RemoteReceiver::getData();
+    int lent = RemoteSensorValue.length();
+    // Serial.println(lent);
+    if (lent == 5) {
+      RemoteSensorValue.concat("00000");
+    }
+    else if (lent == 6) {
+      RemoteSensorValue.concat("0000");
+    }
+    else if (lent == 7) {
+      RemoteSensorValue.concat("000");
+    }
+    else if (lent == 8) {
+      RemoteSensorValue.concat("00");
+    }
+    else if (lent == 9) {
+      RemoteSensorValue.concat( "0");
+    }
+    else {
+    }
+    //    Serial.println(RemoteSensorValue);
+
+
+
+    String vc ;
+    vc = RemoteSensorValue.substring(7, 8);
+    if (vc == "1" ) {
+
+      //Serial.println("Yapp .....");
+    }
+
+    else {
+
+      char RemoteSensorValueCharArray [12] ;
+      RemoteSensorValue.toCharArray(RemoteSensorValueCharArray, 12);
+      // Serial.println(RemoteSensorValueCharArray);
+
+      int MatchSlot = 0;
+
+
+      for (int j = 1 ; j <= 900 ; j = j + 45 ) {
+
+        int Position =  0;
+        char y[2];
+        int x;
+        int k = j ;
+        int countx = 0;
+        // int Increment;
+
+        for (k ; k <= j + 9 ; k++) {
+
+          y[0] = {RemoteSensorValueCharArray[Position]};
+          x = atoi(y);
+          Position++;
+
+
+          //        Serial.print("x ");
+          //        Serial.println(x);
+
+          if ( EEPROM.read(k) == x ) {
+            countx++;
+            //          Serial.print("EEPROM.read(k) ");
+            //          Serial.println(EEPROM.read(k));
+
+            if (countx == 10) {
+
+              /////////////////////// Siren RED Color ....................
+              rgbLed.writeRGB(255, 0, 0);
+
+              /////////////////////// Siren On ....................
+              digitalWrite(13, HIGH);
+
+              //////////// SMS String Making ////////////////
+              MatchSlot = (((j - 1) / 45) + 1) ;
+              String number ;
+              number.concat(MatchSlot);
+              String  SensorNumber = "Alert SN " + number  ;
+              String SensorSerial = " & SL " + RemoteSensorValue ;
+              String SensorNumberSensorSerial = SensorNumber + SensorSerial ;
+              char SensorNumberSensorSerialArray [60] ;
+              SensorNumberSensorSerial.toCharArray(SensorNumberSensorSerialArray, 60);
+
+              //  Serial.print("MatchSlot ");
+              //  Serial.println(MatchSlot);
+              //            j = 901;
+              //            k = j + 45;
+
+              //   Serial.println("Calling......");
+              PrimaryNumberSync ();
+
+              //   Serial.println(PrimaryNumberCharArray);
+              gprs.wake();
+              delay(3000);
+              gprs.sendSMS(PrimaryNumberCharArray, SensorNumberSensorSerialArray );
+              delay(10000);
+              gprs.hangup();
+              gprs.wake();
+              delay(3000);
+              gprs.callUp(PrimaryNumberCharArray);
+              // int CountCallAns = 0 ;
+              for (int i = 0 ; i <= 30 ; i++) {
+                gprs.answer();
+                delay(1000);
+              }
+              //  delay(30000);
+              //            gprs.hangup();
+              //            delay(3000);
+              //            gprs.sendSMS(PrimaryNumberCharArray, "Danger Alert");
+
+              /////////////// Secodary Number Sync /////////////////
+
+              String SecodaryNumberString ;
+              int q = j + 10;
+              int w = j + 20 ;
+              for (q ; q <= w ; q++) {
+                long int SecodaryNumberInt = EEPROM.read(q);
+                SecodaryNumberString.concat(SecodaryNumberInt);
+              }
+
+              SecodaryNumberString.toCharArray(SecodaryNumberCharArray, 13);
+              // Serial.println(SecodaryNumberCharArray);
+              gprs.hangup();
+              gprs.wake();
+              delay(5000);
+              gprs.sendSMS(SecodaryNumberCharArray, SensorNumberSensorSerialArray);
+              delay(10000);
+              gprs.hangup();
+              gprs.wake();
+              delay(3000);
+              gprs.callUp(SecodaryNumberCharArray);
+              for (int i = 0 ; i <= 30 ; i++) {
+                gprs.answer();
+                delay(1000);
+              }
+              gprs.sleep();
+              //////////////  Zeroing //////////////////
+
+              j = 901;
+              k = j + 45;
+
+              /////////////////////// Siren Off ....................
+              digitalWrite(13, LOW);
+
+              /////////////////////// Reset ....................
+
+              delay(5000);
+              rest ();
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+void IsActive () {
+
+  // if (EEPROM.read(1021) == 1) {
+  // CountIsActive++ ;
+
+  if (CurrentTimeIntM == 59) {
+    if (CurrentTimeIntS >= 51) {
+      //  CountIsActive = 0 ;
+      PrimaryNumberSync () ;
+      char MACArray [12];
+      MAC.toCharArray(MACArray, 12);
+      gprs.wake();
+      gprs.sendSMS(PrimaryNumberCharArray, MACArray);
+      delay(15000);
+      gprs.callUp(PrimaryNumberCharArray);
+      delay (30000);
+      gprs.hangup();
+      gprs.sleep();
+      // digitalWrite(AutoReset, LOW);
+    }
+  }
+}
+
+void  IsNetworkRegistered () {
+  while (!gprs.isNetworkRegistered()) {
+
+    // Serial.println("Network Not Register");
+    //  digitalWrite(AutoReset, LOW);
+    rest ();
+  }
+}
+
+void  CallAns () {
+  gprs.answer();
+}
+
+void loop() {
+  // FirstTime = millis () ;
+  SMS ();
+
+
+
+
+  ///////////////////// EEPROM.read(1023) == 255 Is Active & EEPROM.read(1023) == 0 Is Deactive .........
+
+  if (EEPROM.read(1023) == 255) {
+
+    ///////////////////// Power On ORANGE (RED & partial GREEN).........
+
+    rgbLed.writeRGB(255, 128, 0);
+
+    // if (EEPROM.read(1021) == 1) {
+
+    int PowerSupplyStage = digitalRead(PowerPin) ;
+
+    if ( PowerSupplyStage == LOW || EEPROM.read(1020) == 2 ) {
+
+      if (EEPROM.read(1020) ==  255 ) {
+        rgbLed.writeRGB(0, 0, 255);
+        EEPROM.update(1020, 2);
+        // CountPower = 2 ;
+        PowerOffTimeStart = millis () ;
+        PrimaryNumberSync ();
+        gprs.wake();
+        delay(3000);
+        gprs.sendSMS(PrimaryNumberCharArray, "Power Has Gone");
+      }
+
+      ///////////////////// Power On YALLOW .........
+      rgbLed.writeRGB(255, 255, 0);
+      delay(1000);
+
+      //  Serial.println("Power Supply Off");
+
+      if (PowerSupplyStage == HIGH ) {
+        rgbLed.writeRGB(0, 255, 0);
+        delay(1000);
+        //  Serial.println("Power Supply On");
+        // Blink ();
+        PowerUp = 1 ;
+        //CountPower = 0 ;
+        EEPROM.update(1020, 255);
+        delay(1000);
+        PowerOffTimeEnd = millis () ;
+        long int TotalPowerOffTime = ((PowerOffTimeEnd - PowerOffTimeStart) / 60000) ;
+        String TotalPowerOffTimeString = "Total Power Off Period (min) "  ;
+        TotalPowerOffTimeString.concat(TotalPowerOffTime);
+        char TotalPowerOffTimeCahrArray [40] ;
+        TotalPowerOffTimeString.toCharArray(TotalPowerOffTimeCahrArray, 40);
+        PrimaryNumberSync ();
+        gprs.wake();
+        delay(3000);
+        gprs.sendSMS(PrimaryNumberCharArray, TotalPowerOffTimeCahrArray);
+        delay(1000);
+        gprs.sleep();
+
+      }
+    }
+
+    if (PowerUp == 1) {
+      //        rgbLed.writeRGB(0, 255, 0);
+      Buzzer () ;
+      delay(60000);
+      Buzzer () ;
+      delay(60000);
+      Buzzer () ;
+      delay(60000);
+      Buzzer () ;
+      delay(60000);
+      Buzzer () ;
+      delay(60000);
+      Buzzer () ;
+      EEPROM.update(1020, 0);
+      PowerUp = 0 ;
+      //digitalWrite(AutoReset, LOW);
+    }
+
+    else if (PowerUp == 0) {
+      Scanning () ;
+    }
+
+    //}
+    /*else if (EEPROM.read(1021) == 0) {
+      Scanning () ;
+      }*/
+  }
+  else {
+
+    ///////////////////// Deactive Color BLUE.........
+
+    rgbLed.writeRGB(0, 0, 255);
+  }
+
+  /* StageOne ();
+    SectionTwo ();
+    SectionOne ();*/
+
+  // LastTime = millis () ;
+  IsActive ();
+  REALTIME ();
+  IsNetworkRegistered ();
+  //  CallAns ();
+  // Serial.println("Looping");
+}
